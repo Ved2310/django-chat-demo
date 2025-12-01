@@ -1,0 +1,107 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Chat Room: {{ room_name }}</title>
+    <link rel="stylesheet" href="{% static 'chat/style.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h2># {{ room_name }}</h2>
+            <a href="/chat/" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">Leave Room</a>
+        </header>
+
+        <div id="chat-log" class="chat-log">
+            <!-- Messages will appear here -->
+        </div>
+
+        <div class="chat-input-area">
+            <input id="chat-message-input" type="text" placeholder="Type a message..." autocomplete="off">
+            <input id="chat-message-submit" type="button" value="Send">
+        </div>
+    </div>
+
+    {{ room_name|json_script:"room-name" }}
+
+    <script>
+        const roomName = JSON.parse(document.getElementById('room-name').textContent);
+        const chatLog = document.querySelector('#chat-log');
+
+        // Get username from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const myUsername = urlParams.get('username') || 'Anonymous';
+
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const chatSocket = new WebSocket(
+            protocol
+            + window.location.host
+            + '/ws/chat/'
+            + roomName
+            + '/'
+        );
+
+        chatSocket.onmessage = function (e) {
+            const data = JSON.parse(e.data);
+            const message = data.message;
+            const sender = data.username;
+
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message-wrapper');
+
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+
+            if (sender === myUsername) {
+                messageWrapper.classList.add('sent');
+                messageElement.classList.add('sent');
+                messageElement.textContent = message;
+            } else {
+                messageWrapper.classList.add('received');
+                messageElement.classList.add('received');
+
+                const senderName = document.createElement('div');
+                senderName.classList.add('sender-name');
+                senderName.textContent = sender;
+
+                messageWrapper.appendChild(senderName);
+                messageElement.textContent = message;
+            }
+
+            messageWrapper.appendChild(messageElement);
+            chatLog.appendChild(messageWrapper);
+
+            chatLog.scrollTop = chatLog.scrollHeight;
+        };
+
+        chatSocket.onclose = function (e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        document.querySelector('#chat-message-input').focus();
+        document.querySelector('#chat-message-input').onkeyup = function (e) {
+            if (e.keyCode === 13) {  // enter, return
+                document.querySelector('#chat-message-submit').click();
+            }
+        };
+
+        document.querySelector('#chat-message-submit').onclick = function (e) {
+            const messageInputDom = document.querySelector('#chat-message-input');
+            const message = messageInputDom.value;
+
+            if (message.trim() === "") return;
+
+            chatSocket.send(JSON.stringify({
+                'message': message,
+                'username': myUsername
+            }));
+            messageInputDom.value = '';
+        };
+    </script>
+</body>
+
+</html>
